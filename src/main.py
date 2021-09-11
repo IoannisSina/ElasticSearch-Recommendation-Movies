@@ -1,15 +1,20 @@
-from script1 import insert_movies, search_movies
 from elasticsearch import Elasticsearch
-
+from script1 import insert_movies, mainLoop1
+from script2 import mainLoop2
 es = Elasticsearch(HOST="http://localhost", PORT="9200")
 
 # insert movies
 # insert_movies(es)
 
-# search for a movie
-title_input = "Lady" # input("Please enter a movie title:")
-response = search_movies(es, title_input)
-print("\n\nMovies similar to " + title_input + " (descending order, BM25 metric):\n")
-for movie in response['hits']['hits']:
-  print(movie['_source']['title'] + " with a similarity score of " + str(movie['_score']))
+# ---------------------------search for a movie based only on BM25 metric | Q1---------------------------
+print("\n--------------------------------BM25 similarity--------------------------------\n")
+mainLoop1(es)
+print("\n-------------------------------------------------------------------------------\n")
+# -------------------------------------------------------------------------------------------------------
+
+# --------------search for a movie based on BM25, user's rating and avg of all ratings | Q2--------------
+print("\n-----------------BM25, user's rating and avg rating similarity-----------------\n")
+mainLoop2(es)
+print("\n-------------------------------------------------------------------------------\n")
+# -------------------------------------------------------------------------------------------------------
 

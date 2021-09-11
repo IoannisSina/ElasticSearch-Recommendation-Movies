@@ -2,8 +2,12 @@
 Read movies.csv and add the to Elasticsearch DB
 """
 import os
+import warnings
 from elasticsearch import Elasticsearch, helpers
 import pandas as pd
+
+
+QUERY_SIZE = 20
 
 def bulk_json_data(movies, _index):
     for rec in movies:
@@ -54,7 +58,7 @@ def search_movies(es, title):
 
     query = {
         # get only first 10 records
-        "size": 10,
+        "size": QUERY_SIZE,
         "query": {
             "match": {
                 "title": title
@@ -68,8 +72,38 @@ def search_movies(es, title):
     result = es.search(body=query, index='movies')
     return result
 
+# sample of returned value
+# {'_index': 'movies', '_type': '_doc', '_id': '1', '_score': 8.264357, '_source': {'movieId': 1, 'title': 'Toy Story (1995)', 'genres': 'Adventure|Animation|Children|Comedy|Fantasy'}}
+def result_to_pd(result):
+    final_result = []
+    for movie in result:
+        temp = {
+            "Title": movie['_source']['title'],
+            "Score": movie['_score'],
+            "Genres": movie['_source']['genres']
+        }
+        final_result.append(temp)
+    
+    df = pd.DataFrame(final_result)
+    df.sort_values("Score", inplace=True, ascending=False)
+    df = df.reset_index(drop=True)
+    return df
+
+def mainLoop1(es):
+    warnings.simplefilter("ignore")
+    title_input = input("Please enter a movie title (type exit() to exit):\n")
+    while(title_input != "exit()"):
+        response = search_movies(es, title_input)
+
+        if len(response['hits']['hits']) == 0:
+            print("\nNo movies returned!\n")
+        else:
+            print("\n\nMovies similar to " + title_input + " (descending order, BM25 metric):\n")
+            print(result_to_pd(response['hits']['hits']))
+            print("\n")
+        title_input = input("Please enter a movie title (type exit() to exit):\n")
+    print("\n")
+
 if __name__ == "__main__":
     es = Elasticsearch(HOST="http://locahost", PORT=9200)
-    # insert_movies(es)
-    response = search_movies(es, "Toy Story")
-    print(response)
+    mainLoop1(es)
