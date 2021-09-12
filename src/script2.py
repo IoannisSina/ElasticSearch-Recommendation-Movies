@@ -65,7 +65,7 @@ def mainLoop2(es):
             print("\nNo movies returned!\n")
         else:
             print("\n\nMovies similar to " + title_input + " (BM25, avarage ratings and user's rating):\n")
-            print(final_rating(response['hits']['hits'], user_id))
+            print(final_rating(response['hits']['hits'], int(user_id)))
             print("\n")
         title_input = input("Please enter a movie title (type exit() to exit):\n")
     print("\n")
