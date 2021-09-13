@@ -4,10 +4,11 @@ import warnings
 from elasticsearch import Elasticsearch
 import matplotlib.pyplot as plt
 from gensim.models import word2vec
+from keras import losses
 from keras.models import Sequential
-from keras.layers import Dense
-from sklearn.model_selection import KFold
+from keras.layers import Dense, Softmax
 from sklearn.metrics import f1_score, precision_score, recall_score
+from sklearn.model_selection import train_test_split
 import pandas as pd
 import numpy as np
 from script1 import search_movies
@@ -15,6 +16,16 @@ from script1 import search_movies
 # All possible ratings. These are our classes for the model output. If the model predocts label 5 then the predicted rating is 3
 CLASSES = [.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
 LABELS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # avoid tesor flow warnings
+
+def get_ratings_average():
+    """
+    returns a df with the avg of each movie and the initial df without the timestamp
+    """
+    ratings_avg = ratings.groupby(by='movieId').mean()
+    ratings_avg = ratings_avg.drop('userId', axis=1).reset_index()
+
+    return ratings_avg
 
 def get_all_genres():
     """
@@ -114,10 +125,18 @@ def generateMovieVectors():
         movie_vectors[movie_id] = list(title_vectors[movie_id]) + list(genre_vectors[movie_id])
     return movie_vectors
 
+def getPredictionLabels(predictions):
+    """
+    This function calculates the real label for each prediction.
+    Returns the index of the biggest probability
+    """
+    return [np.argmax(prediction) for prediction in predictions]
+
 def neuralForUser(user_id):
     """
     This function creates and trains a neural network according to the current user's
-    ratings. Return trained model in order to use it for predicting movies' ratings
+    ratings. Return trained model in order to use it for predicting movies' ratings.
+    Return movie vectors so we dont have to recalculate them.
     """
     # for one user
     X = []
@@ -129,51 +148,99 @@ def neuralForUser(user_id):
     for movie_id in movies_ids:
         if ((ratings['movieId'] == movie_id) & (ratings['userId'] == user_id)).any():
             X.append(movie_vectors[movie_id])
-            y.append(float(ratings.loc[(ratings['movieId'] == movie_id) & (ratings['userId'] == user_id)].iloc[0]['rating']))
+            y.append(LABELS[CLASSES.index(np.array(ratings.loc[(ratings['movieId'] == movie_id) & (ratings['userId'] == user_id)].iloc[0]['rating']))]) # append the LABEL of the class
+
+    # split X, y in train and test sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.75, random_state=42)
+
+    # define the keras model
+    model = Sequential()
+    model.add(Dense(32, input_dim=len(X_train[0]), activation='relu'))
+    model.add(Dense(16, activation='relu'))
+    model.add(Dense(10))
+
+    # compile the keras model
+    model.compile(loss=losses.SparseCategoricalCrossentropy(from_logits=True), optimizer='adam', metrics=['accuracy'])
+
+    print("\n------------------------------Training model------------------------------\n")
+    # fit the keras model on the dataset
+    model.fit(np.array(X_train), np.array(y_train), epochs=10, verbose=0)
+    print("\n--------------------------------------------------------------------------\n")
+
+    # make predictions of the test set. Each prediction will be an array which will provide a probability 
+    # for each label. We will keep the biggest one
+    probability_model = Sequential([model, Softmax()])
+
+    # see accurancy and 
+    predictions = probability_model.predict(np.array(X_test))
+
+    # each prediction is a 10 length vector. We have to calculate y_pred based on the boggest probability
+    y_pred = getPredictionLabels(predictions)
+
+    # assert y_test and y_pred have same length
+    assert len(y_test) == len(y_pred), "Something is wrong with the predicsion process!"
+
+    print("\n-------------------------------Scores-------------------------------\n")
+    print("Precision: " + str(precision_score(y_test, y_pred, labels=LABELS, average='micro')))
+    print("Recall: " + str(recall_score(y_test, y_pred, labels=LABELS, average='micro')))
+    print("F1 Score: " + str(f1_score(y_test, y_pred, labels=LABELS, average='micro')))
+    print("\n--------------------------------------------------------------------\n")
+    return probability_model, movie_vectors
+
+def final_rating(response, user_id, predictor, movies_vectors):
+    # get all dfs needed to cacluate the final one and create final result
+    final_result = []
+    ratings_avg = get_ratings_average()
+    # I will use a linear combination of BM25 user's rating and avg_ratings for the new metric
+    # change all scores according to the metric: BM25 + user's rating after trainings the model for the current user + avg rating
+    for movie in response:
+        movie_id = movie['_source']['movieId']
+        # if avg does not exist set it to 0 so it does not affect the sum
+        # if user's rating does not exist set it to 0 so it does not affect the sum
+        movie_BM25 = movie['_score']
+        movie_ratings_avg = float(ratings_avg.loc[ratings_avg['movieId'] == movie_id].iloc[0]['rating']) if movie_id in ratings_avg.movieId else -1
+        user_rating = float(ratings.loc[(ratings['movieId'] == movie_id) & (ratings['userId'] == user_id)].iloc[0]['rating']) if ((ratings['movieId'] == movie_id) & (ratings['userId'] == user_id)).any() else "-"
+        # assert that row exsists!!
+        # -----------------------------------------calculate predicted RATING-----------------------------------------
+        prediction_array = predictor.predict(np.array([movies_vectors[movie_id]]))
+        predicted_label = getPredictionLabels(prediction_array)
+        user_predicted_rating = CLASSES[predicted_label[-1]]
+        # ------------------------------------------------------------------------------------------------------------
+        new_record = {
+            "Title": movie['_source']['title'],
+            "Score": movie_BM25
+        }
+        new_record["Score"] += movie_ratings_avg if movie_ratings_avg != -1 else 0
+        new_record["Score"] += user_rating if user_rating != "-" else user_predicted_rating
+        new_record["User_true_r"] = user_rating
+        new_record["User_predicted_r"] = user_predicted_rating
+        new_record["Genres"] = movie['_source']['genres']
+        final_result.append(new_record)
     
-
-    kf = KFold(n_splits=4, shuffle=True)
-
-    for fold, (train_index, test_index) in enumerate(kf.split(X)):
-        X_train = X.iloc[train_index]
-        y_train = y.iloc[train_index]
-        X_test = X.iloc[test_index]
-        y_test = y.iloc[test_index]
-
-        # define the keras model
-        model = Sequential()
-        model.add(Dense(32, input_dim=X_train.shape[1], activation='relu'))
-        model.add(Dense(16, activation='relu'))
-        model.add(Dense(10, activation='softmax'))
-        # model.summary()
-
-        # compile the keras model
-        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-        # fit the keras model on the dataset
-        model.fit(X_train, y_train, epochs=10, batch_size=10, verbose=0)
-
-
-
+    df = pd.DataFrame(final_result)
+    df.sort_values("Score", inplace=True, ascending=False)
+    df = df.reset_index(drop=True)
+    return df
 
 def mainLoop4(es):
-    neuralForUser(1)
-    # neuralForUser("", 1)
-    # warnings.simplefilter("ignore")
-    # user_id = input("Please enter you ID (int): \n")
-    # while (not user_id.isdigit()):
-    #     user_id = input("Please enter user's ID (int): \n")
+    warnings.simplefilter("ignore")
+    user_id = input("Please enter you ID (int): \n")
+    while (not user_id.isdigit()):
+        user_id = input("Please enter user's ID (int): \n")
     
-    # title_input = input("Please enter a movie title (type exit() to exit):\n")
-    # while(title_input != "exit()"):
-    #     response = search_movies(es, title_input)
-    #     if len(response['hits']['hits']) == 0:
-    #         print("\nNo movies returned!\n")
-    #     else:
-    #         print("\n\nMovies similar to " + title_input + " (BM25, avarage ratings and user's rating AFTER K-means):\n")
-    #         neuralForUsers(title_input, int(user_id))
-    #         print("\n")
-    #     title_input = input("Please enter a movie title (type exit() to exit):\n")
-    # print("\n")
+    # calculate here in order to do it once
+    predictor, movies_vectors = neuralForUser(int(user_id))
+    title_input = input("Please enter a movie title (type exit() to exit):\n")
+    while(title_input != "exit()"):
+        response = search_movies(es, title_input)
+        if len(response['hits']['hits']) == 0:
+            print("\nNo movies returned!\n")
+        else:
+            print("\n\nMovies similar to " + title_input + " (BM25, avarage ratings and user's rating AFTER NN predictions):\n")
+            print(final_rating(response['hits']['hits'], int(user_id), predictor, movies_vectors))
+            print("\n")
+        title_input = input("Please enter a movie title (type exit() to exit):\n")
+    print("\n")
 
 if __name__ == "__main__":
     es = Elasticsearch(HOST="http://localhost", PORT="9200")
