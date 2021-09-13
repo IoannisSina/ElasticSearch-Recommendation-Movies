@@ -24,17 +24,11 @@ def get_all_genres():
     """
     movies = pd.read_csv(os.path.abspath(os.getcwd()) + "\src\datasets\movies.csv", index_col=False)
     pre_genres = movies["genres"].to_list()
-    genres = []
 
     # get all unique genres
-    for string in pre_genres:
-        current_genres = string.split("|")
-
-        for genre in current_genres:
-            if genre not in genres:
-                genres.append(genre)
-
-    return genres
+    tokenized_genres = [string.split("|") for string in pre_genres]
+    genres = set([item for sublist in tokenized_genres for item in sublist])
+    return list(genres)
 
 def allUsersGenreRatings():
     """
