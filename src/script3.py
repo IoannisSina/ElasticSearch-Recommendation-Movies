@@ -53,6 +53,9 @@ def allUsersGenreRatings():
     return genre_ratings
 
 def kMeans():
+    """
+    Execute K-means algorithm and return labels. Labels show the cluster to which the user belongs.
+    """
     X = allUsersGenreRatings()
     kmeans = KMeans(
         init="random",
@@ -66,6 +69,9 @@ def kMeans():
     return kmeans.labels_
 
 def calculateRating(clustered_users, movie_id, user_id):
+    """
+    Calculates and returns the avarage raiting from a specific cluster.
+    """
     ratings_sum = 0.0
     ratings_count = 0.0
 
@@ -117,6 +123,9 @@ def fillAllRatings(movies):
     return df
 
 def final_rating(movies, user_id):
+    """
+    Calculates the final rating based on BM25 score, avarage rarting of the movie and the user's rating predicted by clustering
+    """
     # get all dfs needed to cacluate the final one and create final result
     final_result = []
     ratings_avg = get_ratings_average()

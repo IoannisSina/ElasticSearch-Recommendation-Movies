@@ -188,6 +188,9 @@ def neuralForUser(user_id):
     return probability_model, movie_vectors
 
 def final_rating(response, user_id, predictor, movies_vectors):
+    """
+    Calculates the final rating based on BM25 score, avarage rarting of the movie and the user's rating predicted by Keras model
+    """
     # get all dfs needed to cacluate the final one and create final result
     final_result = []
     ratings_avg = get_ratings_average()

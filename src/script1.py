@@ -10,6 +10,9 @@ import pandas as pd
 QUERY_SIZE = 20
 
 def bulk_json_data(movies, _index):
+    """
+    Returns the record that should be saved to ElasticSeacr Database
+    """
     for rec in movies:
         yield {
             "_index": _index,
@@ -75,6 +78,9 @@ def search_movies(es, title):
 # sample of returned value
 # {'_index': 'movies', '_type': '_doc', '_id': '1', '_score': 8.264357, '_source': {'movieId': 1, 'title': 'Toy Story (1995)', 'genres': 'Adventure|Animation|Children|Comedy|Fantasy'}}
 def result_to_pd(result):
+    """
+    Converts the final result to DataFrame in order to print it
+    """
     final_result = []
     for movie in result:
         temp = {

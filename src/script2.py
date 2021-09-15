@@ -21,6 +21,9 @@ def get_ratings_average():
 # sample of returned value
 # {'_index': 'movies', '_type': '_doc', '_id': '1', '_score': 8.264357, '_source': {'movieId': 1, 'title': 'Toy Story (1995)', 'genres': 'Adventure|Animation|Children|Comedy|Fantasy'}}
 def final_rating(response, user_id):
+    """
+    Calculates the final rating based on BM25 score, avarage rarting of the movie and the user's rating (if exists)
+    """
     # get all dfs needed to cacluate the final one and create final result
     final_result = []
     ratings, ratings_avg = get_ratings_average()
