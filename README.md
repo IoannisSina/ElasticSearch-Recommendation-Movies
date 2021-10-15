@@ -13,7 +13,7 @@ In this script, similar movies are retrieved, and their score is updated based o
 In this script [Kmeans](https://en.wikipedia.org/wiki/K-means_clustering) algorithm is used to cluster users based on their genre ratings. When a user has not rated a movie, the rating is calculated using the mean rating from the cluster that the user belongs to. An array is printed indicating the movies’ scores after the prediction of the rating.
 
 ### Script4.py
-In this script a Neural Network is created using [Keras](https://keras.io/) for the current user based on his/her genre ratings. Movie titles are converted to vectors using the [Word2Vec](https://en.wikipedia.org/wiki/Word2vec) technique to use them as input in the created model. After training the model, it is ready to predict any non-existing rating. An array with the score of each movie is printed after the model predictions.
+In this script a Neural Network is created using [Keras](https://keras.io/) for the current user based on his/her genre ratings. Movie titles are converted to vectors using the [Word2Vec](https://en.wikipedia.org/wiki/Word2vec) technique and are used as an input to the created model. After training the model, any non-existing rating can be predicted. An array with the score of each movie is printed after the model predictions.
 
 # Steps to run 🏃
 1. Download and Install ElasticSearch [here](https://www.elastic.co/downloads/elasticsearch).
